@@ -1,18 +1,88 @@
-from typing import Dict, Optional
-from .actor import Actor
+from typing import Dict, Optional, Tuple
+import random
+import math
+from .entity import Entity
+from ..components.stats import Stats
+from ..components.combat import Combat
 from ..components.ai import AI
 from ..items.weapons import RangedWeapon, MeleeWeapon
 from ..items.armor import Armor
 
-class Enemy(Actor):
-    def __init__(self, x: int, y: int, char: str, color: tuple, 
-                 enemy_type: str, difficulty: float = 1.0):
+class Enemy(Entity):
+    def __init__(self, x: int, y: int, char: str, color: Tuple[int, int, int], 
+                 enemy_type: str):
         super().__init__(x, y, char, color)
         self.enemy_type = enemy_type
-        self.difficulty = difficulty
+        self.faction = self._get_faction()
+        self.name = self._get_name()
+        self.stats = self._get_stats()
+        self.combat = Combat()
+        self.game_state = None
+        self.difficulty = 1.0
         self.ai = AI(self)
         self._setup_enemy()
         
+    def update(self) -> None:
+        super().update()
+        if not self.game_state:
+            return
+            
+        # Basic movement toward player if nearby
+        player = self.game_state.player
+        dist = math.sqrt((player.x - self.x)**2 + (player.y - self.y)**2)
+        
+        if dist < 8:  # Aggro range
+            # Move toward player
+            dx = 0
+            dy = 0
+            if player.x > self.x:
+                dx = 1
+            elif player.x < self.x:
+                dx = -1
+            if player.y > self.y:
+                dy = 1
+            elif player.y < self.y:
+                dy = -1
+                
+            # Try to move
+            if self.game_state.current_zone.is_walkable(self.x + dx, self.y + dy):
+                self.x += dx
+                self.y += dy
+                
+            # Attack if adjacent
+            if dist <= 1.5:
+                damage = random.randint(5, 10)
+                player.stats.modify_health(-damage)
+                self.game_state.add_message(
+                    f"{self.name} attacks for {damage} damage!", 
+                    (255, 0, 0)
+                )
+                
+    def _get_faction(self) -> str:
+        return {
+            "bandit": "bandits",
+            "military": "military",
+            "mutant": "mutants",
+            "zombie": "mutants"
+        }.get(self.enemy_type, "hostile")
+        
+    def _get_name(self) -> str:
+        return {
+            "bandit": "Bandit",
+            "military": "Military Stalker",
+            "mutant": "Mutant",
+            "zombie": "Zombie Stalker"
+        }.get(self.enemy_type, "Unknown Enemy")
+        
+    def _get_stats(self) -> Stats:
+        health, stamina = {
+            "bandit": (50, 100),
+            "military": (75, 100),
+            "mutant": (100, 150),
+            "zombie": (40, 50)
+        }.get(self.enemy_type, (50, 100))
+        return Stats(health, stamina)
+
     def _setup_enemy(self) -> None:
         if self.enemy_type in ENEMY_TEMPLATES:
             template = ENEMY_TEMPLATES[self.enemy_type]

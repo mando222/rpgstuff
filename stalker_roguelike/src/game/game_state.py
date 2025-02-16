@@ -16,10 +16,13 @@ from ..constants import (
     TILE_SIZE,
     BLACK
 )
+from ..graphics.camera import Camera
+import random
 
 class GameState:
     def __init__(self):
         self.map_generator = MapGenerator(100, 100)  # 100x100 zones
+        self.map_generator.game_state = self
         self.current_zone = None
         self.player: Optional[Player] = None
         self.game_time = 0
@@ -32,29 +35,49 @@ class GameState:
         self.weather_system = WeatherSystem(self.sound_manager)
         self.time_system = TimeSystem()
         self.visual_effects = VisualEffects(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.camera = Camera(100, 100)  # Initialize with map size
+        self.game_over = False
+        self.death_message = ""
         
         self._initialize_game()
         
     def _initialize_game(self) -> None:
-        # Create starting zone
-        self.current_zone = self.map_generator.generate_zone(0, 0, "forest")
+        """Initialize a new game"""
+        # Create starting zone with wilderness type
+        self.current_zone = self.map_generator.generate_zone(0, 0, "wilderness")
         
-        # Create player in a valid location
-        player_pos = self._find_valid_spawn()
-        self.player = Player(player_pos[0], player_pos[1])
+        # Find valid starting position
+        start_pos = self._find_valid_spawn()
+        self.player = Player(start_pos[0], start_pos[1])
+        self.player.game_state = self
         self.current_zone.add_entity(self.player)
         
         self.sound_manager.play_music(MusicTracks.EXPLORATION.value)
         
     def _find_valid_spawn(self) -> tuple[int, int]:
-        for x in range(self.current_zone.width):
-            for y in range(self.current_zone.height):
-                if self.current_zone.is_walkable(x, y):
-                    return (x, y)
+        """Find a valid spawn position in the current zone."""
+        # Try to spawn in the center of a room
+        center_x = self.current_zone.width // 2
+        center_y = self.current_zone.height // 2
+        
+        # Spiral out from center until we find a valid spot
+        for radius in range(max(self.current_zone.width, self.current_zone.height)):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    x = center_x + dx
+                    y = center_y + dy
+                    if (0 <= x < self.current_zone.width and 
+                        0 <= y < self.current_zone.height and
+                        self.current_zone.is_walkable(x, y)):
+                        return (x, y)
+        
         raise Exception("No valid spawn location found")
         
     def handle_input(self, event: pygame.event.Event) -> None:
-        if self.current_ui_state == "game":
+        if self.game_over:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                self._restart_game()
+        elif self.current_ui_state == "game":
             self._handle_game_input(event)
         elif self.current_ui_state == "inventory":
             self._handle_inventory_input(event)
@@ -62,32 +85,22 @@ class GameState:
             self._handle_menu_input(event)
             
     def _handle_game_input(self, event: pygame.event.Event) -> None:
+        # Handle key press events
         if event.type == pygame.KEYDOWN:
-            # Movement
-            if event.key == pygame.K_w:
-                self._try_move_player(0, -1)
-            elif event.key == pygame.K_s:
-                self._try_move_player(0, 1)
-            elif event.key == pygame.K_a:
-                self._try_move_player(-1, 0)
-            elif event.key == pygame.K_d:
-                self._try_move_player(1, 0)
-                
             # UI state changes
-            elif event.key == pygame.K_i:
+            if event.key == pygame.K_i:
                 self.current_ui_state = "inventory"
             elif event.key == pygame.K_ESCAPE:
                 self.current_ui_state = "menu"
-                
-            # Actions
             elif event.key == pygame.K_e:
                 self._handle_interaction()
             elif event.key == pygame.K_SPACE:
                 self._handle_attack()
                 
     def _try_move_player(self, dx: int, dy: int) -> None:
-        new_x = self.player.x + dx
-        new_y = self.player.y + dy
+        # Convert float movement values to integers
+        new_x = self.player.x + int(round(dx))
+        new_y = self.player.y + int(round(dy))
         
         # Check for zone transition
         if not (0 <= new_x < self.current_zone.width and 0 <= new_y < self.current_zone.height):
@@ -95,7 +108,7 @@ class GameState:
             return
             
         if self.current_zone.is_walkable(new_x, new_y):
-            self.player.move(dx, dy)
+            self.player.move(int(round(dx)), int(round(dy)))
             
     def _handle_zone_transition(self, x: int, y: int) -> None:
         # Determine new zone coordinates
@@ -145,8 +158,37 @@ class GameState:
         
     def update(self) -> None:
         if self.current_ui_state == "game":
+            # Handle continuous movement
+            keys = pygame.key.get_pressed()
+            dx = dy = 0
+            
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                dy = -1
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                dy = 1
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                dx = -1
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                dx = 1
+                
+            # Normalize diagonal movement
+            if dx != 0 and dy != 0:
+                # Instead of using 0.707, we'll just move in one direction at a time
+                # This gives better grid-based movement
+                if random.random() < 0.5:
+                    dx = 0
+                else:
+                    dy = 0
+                
+            if dx != 0 or dy != 0:
+                self._try_move_player(dx, dy)
+            
+            # Rest of update code...
             self.current_zone.update()
             self.game_time += 1
+            
+            # Update camera to follow player
+            self.camera.update(self.player.x, self.player.y)
             
             # Update player effects
             if self.game_time % 10 == 0:  # Every 10 ticks
@@ -192,15 +234,17 @@ class GameState:
             self.inventory_screen.render(surface, self.player)
         elif self.current_ui_state == "menu":
             self.menu.render(surface)
+        elif self.current_ui_state == "game_over":
+            self._render_game_over(surface)
             
     def _render_game(self, surface: pygame.Surface) -> None:
         # Clear screen
         surface.fill(BLACK)
         
-        # Calculate camera offset
-        camera_offset = self._get_camera_offset()
+        # Get camera offset
+        camera_offset = self.camera.get_offset()
         
-        # Render current zone
+        # Render current zone with camera offset
         self._render_zone(surface, camera_offset)
         
         # Update and render visual effects
@@ -242,15 +286,6 @@ class GameState:
         if len(self.messages) > 50:  # Keep last 50 messages
             self.messages.pop(0) 
 
-    def _get_camera_offset(self) -> tuple[int, int]:
-        """Calculate camera offset to center on player"""
-        return (
-            max(0, min(self.player.x - SCREEN_WIDTH // TILE_SIZE // 2,
-                      self.current_zone.width - SCREEN_WIDTH // TILE_SIZE)),
-            max(0, min(self.player.y - SCREEN_HEIGHT // TILE_SIZE // 2,
-                      self.current_zone.height - SCREEN_HEIGHT // TILE_SIZE))
-        )
-        
     def _handle_interaction(self) -> None:
         # Implementation of _handle_interaction method
         pass
@@ -265,4 +300,49 @@ class GameState:
 
     def _handle_menu_input(self, event: pygame.event.Event) -> None:
         # Implementation of _handle_menu_input method
-        pass 
+        pass
+
+    def handle_player_death(self) -> None:
+        """Handle player death and game over state"""
+        self.game_over = True
+        self.death_message = self._get_death_message()
+        self.current_ui_state = "game_over"
+        self.sound_manager.play_sound(SoundEffects.PLAYER_DEATH.value)
+        
+    def _get_death_message(self) -> str:
+        """Get a contextual death message based on how the player died"""
+        if self.player.stats.current_radiation > 50:
+            return "You succumbed to severe radiation poisoning..."
+        elif self.current_zone.tiles[self.player.x][self.player.y].properties.anomaly_type:
+            return f"You were killed by a {self.current_zone.tiles[self.player.x][self.player.y].properties.anomaly_type} anomaly..."
+        else:
+            return "You died in the Zone..."
+
+    def _render_game_over(self, surface: pygame.Surface) -> None:
+        """Render game over screen"""
+        # Darken the game screen
+        dark_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        dark_overlay.fill((0, 0, 0))
+        dark_overlay.set_alpha(128)
+        surface.blit(dark_overlay, (0, 0))
+        
+        # Render death message
+        font = pygame.font.Font(None, 48)
+        death_text = font.render("GAME OVER", True, (255, 0, 0))
+        message_text = font.render(self.death_message, True, (255, 255, 255))
+        restart_text = font.render("Press R to Restart", True, (255, 255, 255))
+        
+        # Center text on screen
+        surface.blit(death_text, 
+                    (SCREEN_WIDTH//2 - death_text.get_width()//2, 
+                     SCREEN_HEIGHT//2 - 60))
+        surface.blit(message_text, 
+                    (SCREEN_WIDTH//2 - message_text.get_width()//2, 
+                     SCREEN_HEIGHT//2))
+        surface.blit(restart_text, 
+                    (SCREEN_WIDTH//2 - restart_text.get_width()//2, 
+                     SCREEN_HEIGHT//2 + 60))
+
+    def _restart_game(self) -> None:
+        """Reset the game state for a new game"""
+        self.__init__()  # Reinitialize everything 
