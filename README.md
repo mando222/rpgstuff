@@ -18,25 +18,29 @@ A roguelike game set in the STALKER universe, featuring procedurally generated z
 
 1. Clone the repository:
 
-bash
+```bash
 git clone https://github.com/yourusername/stalker_roguelike.git
 cd stalker_roguelike
+```
 
 2. Create and activate virtual environment:
 
-bash
+```bash
 python -m venv venv
 source venv/bin/activate # On Windows: venv\Scripts\activate
+```
 
 3. Install dependencies:
 
-bash
+```bash
 pip install -r requirements.txt
+```
 
 4. Run the game:
 
-bash
-python main.py
+```bash
+python -m stalker_roguelike.src.main
+```
 
 ## Gameplay
 
