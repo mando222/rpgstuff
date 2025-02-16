@@ -1,0 +1,58 @@
+mkdir -p stalker_roguelike/src/{game,entities,components,items,map,ui,utils}
+mkdir -p stalker_roguelike/assets/{images/{characters,items,tiles,ui},sounds}
+mkdir -p stalker_roguelike/tests
+
+# Create __init__.py files
+touch stalker_roguelike/src/__init__.py
+touch stalker_roguelike/src/game/__init__.py
+touch stalker_roguelike/src/entities/__init__.py
+touch stalker_roguelike/src/components/__init__.py
+touch stalker_roguelike/src/items/__init__.py
+touch stalker_roguelike/src/map/__init__.py
+touch stalker_roguelike/src/ui/__init__.py
+touch stalker_roguelike/src/utils/__init__.py
+touch stalker_roguelike/tests/__init__.py
+
+# Create source files
+touch stalker_roguelike/src/main.py
+touch stalker_roguelike/src/config.py
+touch stalker_roguelike/src/constants.py
+
+# Game module files
+touch stalker_roguelike/src/game/game_state.py
+touch stalker_roguelike/src/game/world_generator.py
+
+# Entities module files
+touch stalker_roguelike/src/entities/entity.py
+touch stalker_roguelike/src/entities/actor.py
+touch stalker_roguelike/src/entities/player.py
+touch stalker_roguelike/src/entities/enemies.py
+
+# Components module files
+touch stalker_roguelike/src/components/combat.py
+touch stalker_roguelike/src/components/inventory.py
+touch stalker_roguelike/src/components/stats.py
+touch stalker_roguelike/src/components/ai.py
+
+# Items module files
+touch stalker_roguelike/src/items/item.py
+touch stalker_roguelike/src/items/weapons.py
+touch stalker_roguelike/src/items/armor.py
+touch stalker_roguelike/src/items/consumables.py
+
+# Map module files
+touch stalker_roguelike/src/map/tile.py
+touch stalker_roguelike/src/map/map_generator.py
+touch stalker_roguelike/src/map/zone.py
+
+# UI module files
+touch stalker_roguelike/src/ui/menu.py
+touch stalker_roguelike/src/ui/inventory_screen.py
+touch stalker_roguelike/src/ui/hud.py
+
+# Utils module files
+touch stalker_roguelike/src/utils/logger.py
+touch stalker_roguelike/src/utils/helpers.py
+
+# Test files
+touch stalker_roguelike/tests/test_game.py 
